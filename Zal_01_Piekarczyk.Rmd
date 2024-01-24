@@ -1,0 +1,1024 @@
+---
+title: "Zal_01_Piekarczyk"
+output: 
+  rmdformats::downcute 
+date: "15.06.2023"
+author: "Zuzanna Piekarczyk"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, include=FALSE}
+#install.packages("rmarkdown")
+#install.packages("rmdformats")
+#install.packages("pdftools")
+#install.packages("stringr")
+#install.packages("tm")
+#install.packages("SnowballC")
+#install.packages("dplyr")
+#install.packages("ggplot2")
+#install.packages("wordcloud")
+#install.packages("RColorBrewer")
+#install.packages("wordcloud2")
+#install.packages("tidyverse")
+#install.packages("sentimentr")
+#install.packages("RSentiment")
+#install.packages("syuzhet")
+#install.packages("readr")
+#install.packages("tidyr")
+#install.packages("topicmodels")
+#install.packages("LDAvis")
+#install.packages("kableExtra")
+#install.packages("stopwords")
+#install.packages("corpustools")
+#install.packages("proxy")
+#install.packages("dendextend")
+#install.packages("kernlab")
+#install.packages("caret")
+#install.packages("class")
+#install.packages("e1071")
+#install.packages("servr")
+```
+
+```{r , include=FALSE}
+library(rmarkdown)
+library(rmdformats)
+library(pdftools)
+library(stringr)
+library(tm)
+library(SnowballC)
+library(dplyr)
+library(ggplot2)
+library(wordcloud)
+library(RColorBrewer)
+library(wordcloud2)
+library(tidyverse)
+library(sentimentr)
+library(RSentiment)
+library(syuzhet)
+library(readr)
+library(tidyr)
+library(topicmodels)
+library(LDAvis)
+library(kableExtra)
+library(stopwords)
+library(corpustools)
+library(proxy)
+library(dendextend)
+library(kernlab)
+library(caret)
+library(class)
+library(e1071)
+library(servr)
+k <- function(data) {
+  kbl(data, booktabs = TRUE, digits = 4) %>% 
+    kable_paper("hover", full_width = F, bootstrap_options = "striped", font_size = 10)
+}
+```
+
+
+# 1. Przygotowanie korpusu
+
+## 1.1 Opis zbioru danych
+
+Trylogia "Igrzyska śmierci" autorstwa Suzanne Collins to popularna seria książek dystopijnych, składająca się z trzech części: "Igrzyska śmierci", "W pierścieniu ognia" i "Kosogłos". Seria opowiada historię wizjonerskiego świata Panem, podzielonego na dwanaście dystryktów kontrolowanych przez okrutny Kapitol.
+
+Na potrzeby projektu wykorzystano pierwsze dwie części serii, czyli książki "Igrzyska śmierci" oraz "W pierścieniu ognia".
+
+Akcja rozpoczyna się w pierwszej części, "Igrzyska śmierci". Główną bohaterką jest szesnastoletnia Katniss Everdeen, mieszkanka Dystryktu Dwunastego. Kapitol organizuje coroczne Igrzyska Śmierci, w których po jednym chłopcu i jednej dziewczynie z każdego dystryktu zostaje wybranych jako "trybuci" i zmuszani do walki na arenie, gdzie tylko jeden z nich może przeżyć. Katniss zgłasza się dobrowolnie na miejsce swojej siostry i wraz z chłopakiem z jej dystryktu, Peetą Mellarkiem, wchodzi do śmiertelnej rywalizacji.
+
+Drugą część, "W pierścieniu ognia", skupia się na konsekwencjach wygranej Katniss i Peety w poprzednich Igrzyskach. Ich triumf staje się iskrą buntu w innych dystryktach, co prowadzi do nasilenia oporu przeciwko Kapitolowi. Katniss zostaje ponownie wysłana na arenę, gdzie musi stawić czoła niebezpieczeństwom i wyzwanianiom, które zmienią losy całego Panem.
+
+## 1.2 Wczytanie danych
+
+Wczytanie trylogii do zmiennej trilogy:
+```{r}
+trilogy_raw <- "C:/Users/super/OneDrive - Paccor/Pulpit/the_hunger_games_-_trilogy.pdf"
+
+trilogy <- pdf_text(trilogy_raw)
+```
+
+Podział trylogii na pierwszą i drugą książkę:
+```{r}
+poczatek_czesci_1 <- which(grepl("When I wake up, the other side of the bed is cold.", trilogy))
+koniec_czesci_1 <- which(grepl("END OF BOOK ONE", trilogy))
+czesc_1 <- trilogy[poczatek_czesci_1:koniec_czesci_1]
+
+poczatek_czesci_2 <- which(grepl("I clasp the flask", trilogy))
+koniec_czesci_2 <- which(grepl("END OF BOOK TWO", trilogy))
+czesc_2 <- trilogy[poczatek_czesci_2:koniec_czesci_2]
+```
+
+Ilość stron książki "Igrzyska śmierci":
+```{r}
+length(czesc_1)
+```
+
+Ilość stron książki "W pierścieniu ognia":
+```{r}
+length(czesc_2)
+```
+
+## 1.3 Normalizacja
+
+Czyszczenie tekstu pierwszej i drugiej części książki ze zbędnych znaków:
+```{r}
+czysc_tekst_1 <- function(czesc_1){
+  tekst_tenmp <- str_replace_all(czesc_1, "\\s{2,}", "") %>% 
+    str_replace_all("[:cntrl:]", "") %>%
+    tolower() %>% 
+    str_remove_all("rt") %>% 
+    str_remove_all("&amp") %>% 
+    str_remove_all("#[a-zA-Z0-9']*") %>% 
+    str_remove_all("@\\w+") %>% 
+    str_remove_all("(f|ht)(tp)([^ ]*)") %>% 
+    str_remove_all("http(s?)([^ ]*)") %>% 
+    str_remove_all("\"ebook converter DEMO - www.ebook-") %>%
+    str_remove_all("ebook") %>%
+    str_remove_all("conveer") %>%
+    str_remove_all("demo") %>%
+    str_remove_all("www") %>%
+    str_replace_all("[[:punct:]]", " ") %>%
+    str_remove_all("\\d") %>%
+    str_replace_all("\\s{2,}", " ") %>% 
+    str_replace_all("\\b\\w{1}\\b", "") %>%
+    str_trim()
+}
+czesc_1_clean <- czysc_tekst_1(czesc_1)
+
+czysc_tekst_2 <- function(czesc_2){
+  tekst_tenmp <- str_replace_all(czesc_2, "\\s{2,}", "") %>% 
+    str_replace_all("[:cntrl:]", "") %>%
+    tolower() %>% 
+    str_remove_all("rt") %>% 
+    str_remove_all("&amp") %>% 
+    str_remove_all("#[a-zA-Z0-9']*") %>% 
+    str_remove_all("@\\w+") %>% 
+    str_remove_all("(f|ht)(tp)([^ ]*)") %>% 
+    str_remove_all("http(s?)([^ ]*)") %>% 
+    str_remove_all("\"ebook converter DEMO - www.ebook-") %>%
+    str_remove_all("ebook") %>%
+    str_remove_all("conveer") %>%
+    str_remove_all("demo") %>%
+    str_remove_all("www") %>%
+    str_replace_all("[[:punct:]]", " ") %>%
+    str_remove_all("\\d") %>%
+    str_replace_all("\\s{2,}", " ") %>% 
+    str_replace_all("\\b\\w{1}\\b", " ") %>%
+    str_trim()
+}
+czesc_2_clean <- czysc_tekst_2(czesc_2)
+```
+
+
+## 1.4 Tokenizacja
+
+Wyodrębnienie tokenów z obu tekstów:
+```{r}
+czesc_1_token <- str_split(czesc_1_clean, " ")
+czesc_2_token <- str_split(czesc_2_clean, " ")
+```
+
+Usunięcie duplikatów:
+```{r}
+czesc_1_dup <- czesc_1_clean[!duplicated(czesc_1_token)]
+czesc_2_dup <- czesc_2_clean[!duplicated(czesc_2_token)]
+```
+
+## 1.5 Stopwords
+
+Wczytanie listy najczęściej używanych angielskich słów:
+```{r}
+path <- "https://www.textfixer.com/tutorials/common-english-words.txt"
+stopwords <- scan(path, character(), sep = ',')
+```
+
+Dodanie dodatkowych słów do usunięcia z pakietu tm oraz zdefiniowanych ręcznie:
+```{r}
+stopwordstm <- stopwords("en")
+stopwords <-  c(stopwords, stopwordstm, "a", "", "of", "up", "is", "the", "her", "as", "my", "to", "in", "on", "that", "ll", "re", "would", "still", "ago", "ve", "don", "able", "about", "across", "after", "all", "almost", "also", "am", "among", "an", "and", "any", "are", "as", "at", "be", "because", "been", "but", "by", "can", "cannot", "could", "dear", "did", "do", "does", "either", "else", "ever", "every", "for", "from", "get", "got", "had", "has", "have", "he", "her", "hers", "him", "his", "how", "however", "i", "if", "in", "into", "is", "it", "its", "just", "least", "let", "like", "likely", "may", "me", "might", "most", "must", "my", "neither", "no", "nor", "not", "of", "off", "often", "on", "only", "or", "other", "our", "own", "rather", "said", "say", "says", "she", "should", "since", "so", "some", "than", "that", "the", "their", "them", "then", "there", "these", "they", "this", "tis", "to", "too", "twas", "us", "wants", "was", "we", "were", "what", "when", "where", "which", "while", "who", "whom", "why", "will", "with", "yet", "you", "your", "notso", "one", "be", "have", "do", "say", "get", "make", "go", "know", "take", "see", "come", "think", "look", "want", "give", "use", "find", "tell", "ask", "work", "seem", "feel", "try", "leave", "call", "love", "help", "show", "hear", "play", "run", "move", "live", "believe", "bring", "happen", "write", "provide", "sit", "stand", "lose", "pay", "meet", "include", "continue", "set", "learn", "change", "lead", "understand", "watch", "follow", "stop", "create", "speak", "read", "allow", "add", "spend", "grow", "open", "walk", "win", "offer", "remember", "consider", "appear", "buy", "serve", "die", "send", "expect", "build", "stay", "fall", "cut", "reach", "kill", "remain", "suggest", "raise", "pass", "sell", "require", "report", "decide", "pull", "return", "explain", "hope", "develop", "carry", "break", "receive", "agree", "support", "argue", "fight", "happen", "describe", "represent", "include", "prevent", "attend", "prepare", "notice", "apply", "support", "compare", "avoid", "enjoy")
+```
+
+Usunięcie słów będących na liście stopwords z obu książek:
+```{r}
+czesc_1_stop <- lapply(czesc_1_token, function(x) x[!x %in% stopwords])
+czesc_2_stop <- lapply(czesc_2_token, function(x) x[!x %in% stopwords])
+```
+
+## 1.6 Stemming
+
+Wyodrębnienie rdzeni słów za pomocą algorytmu Portera:
+```{r}
+czesc_1_stem <- lapply(czesc_1_stop, function(x) wordStem(x, language = "english"))
+czesc_2_stem <- lapply(czesc_2_stop, function(x) wordStem(x, language = "english"))
+```
+
+## 1.7 Zliczanie wystąpień
+
+Przektszałcenie zagnieżdżonej listy w listę jednopoziomową:
+```{r}
+czesc_1_un <- unlist(czesc_1_stem)
+czesc_2_un <- unlist(czesc_2_stem)
+```
+
+Przekształcenie na obiekt tibble:
+```{r}
+czesc_1_tibble <- tibble(word=czesc_1_un)
+czesc_2_tibble <- tibble(word=czesc_2_un)
+```
+
+Tworzenie bag-of-words:
+```{r}
+czesc_1_bow <- czesc_1_tibble %>%
+  group_by(word) %>%
+  mutate(count = n()) %>%
+  arrange(desc(count)) %>%
+  distinct(word, .keep_all = TRUE)
+czesc_1_bow
+
+czesc_2_bow <- czesc_2_tibble %>%
+  group_by(word) %>%
+  mutate(count = n()) %>%
+  arrange(desc(count)) %>%
+  distinct(word, .keep_all = TRUE)
+czesc_2_bow
+```
+
+W książce "Igrzyska śmierci" zidentyfikowano 9137 unikalnych słów, natomiast w "W pierścieniu ognia" - 9374 słowa.
+
+
+# 2. Chmury słów
+
+Ograniczenie zbiorów do 20 najczęściej występujących słów:
+```{r}
+czesc_1_top20 <- head(czesc_1_bow, 20)
+czesc_2_top20 <- head(czesc_2_bow, 20)
+```
+
+## 2.1 Wykresy kolumnowe
+```{r}
+wykres_1 <- ggplot(czesc_1_top20, aes(x = reorder(word, -count), y = count)) +
+  geom_col(fill = "navy") +
+  geom_text(aes(label = count), vjust = -0.5, color = "darkgrey", size = 3) +
+  xlab("Słowo") +
+  ylab("Liczba wystąpień") +
+  ggtitle("Najczęściej występujące słowa - Igrzyska śmierci") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "aliceblue"))
+print(wykres_1)
+
+
+wykres_2 <- ggplot(czesc_2_top20, aes(x = reorder(word, -count), y = count)) +
+  geom_col(fill = "darkred") +
+  geom_text(aes(label = count), vjust = -0.5, color = "darkgrey", size = 3) +
+  xlab("Słowo") +
+  ylab("Liczba wystąpień") +
+  ggtitle("Najczęściej występujące słowa - W pierścieniu ognia") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(hjust = 0.5),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_rect(fill = "aliceblue"))
+print(wykres_2)
+```
+
+## 2.2 Chmura słów występujących w porównywanych książkach jednocześnie
+
+Ograniczenie zbiorów do 50 najczęściej występujacych słów:
+```{r}
+czesc_1_top50 <- head(czesc_1_bow, 50)
+czesc_2_top50 <- head(czesc_2_bow, 50)
+```
+
+Chmura słów, które występują w obu książkach:
+```{r}
+wspolne_slowa <- intersect(czesc_1_top50$word, czesc_2_top50$word)
+chmura_1  <- data.frame(word = wspolne_slowa, freq = 1)
+wordcloud2(chmura_1 , size = 0.2, color = 'random-dark')
+```
+***Wnioski:*** Można zauważyć, że w obu książkach często wsytępują odniesienia do słów takich jak game, capitol, peeta, home, mother, haymitch czy district. Są to bez wątpienia słowa/wątki spajające obie części pod kątem merytorycznym.
+
+## 2.3 Chmura unikatowych słów występujących tylko w poszczególnych dokumentach
+
+Wyodrębnienie 100 najczęściej występujacych słów w każdej ze książek:
+```{r}
+czesc_1_top100 <- head(czesc_1_bow, 100)
+czesc_2_top100 <- head(czesc_2_bow, 100)
+```
+
+Słowa występujące tylko w książce "Igrzyska śmierci":
+```{r}
+tylko_igrzyska <- setdiff(czesc_1_top100$word, czesc_2_top100$word)
+chmura_2a <- data.frame(word = tylko_igrzyska, freq = 1)
+wordcloud2(chmura_2a, size = 0.2, color = 'random-dark')
+```
+***Wnioski:*** Słowa charakterystyczne dla pierwszej części trylogii to m.in. rue, sleep, place, food, eat, sleep, die, wood, fire i można uznać je za słowa-klucze określające ten tom.
+
+Słowa występujące tylko w książce "W pierścieniu ognia":
+```{r}
+tylko_wpierscieniu <- setdiff(czesc_2_top100$word, czesc_1_top100$word)
+chmura_2b <- data.frame(word = tylko_wpierscieniu, freq = 1)
+wordcloud2(chmura_2b, size = 0.2, color = 'random-dark')
+```
+***Wnioski:*** Słowa charakterystyczne dla drugiej części trylogii to m.in. finnick, johanna, snow, dead, stop, beete, co zgadza się z poruszaną tematyką.
+
+
+# 3. Grupowanie i topic modelling
+
+Podział na rozdziały książki "Igrzyska śmieci":
+```{r}
+chapter_p_1 <- which(grepl("When I wake up, the other side of the bed is cold.", czesc_1))
+chapter_k_1 <- which(grepl("It’s Primrose Everdeen.", czesc_1))
+
+chapter_p_2 <- which(grepl("One time, when I was in a blind", czesc_1))
+chapter_k_2 <- which(grepl("Of course, the odds have not been very dependable of late.", czesc_1))
+
+chapter_p_3 <- which(grepl("The moment the anthem ends, we are", czesc_1))
+chapter_k_3 <- which(grepl(" pool of vomit and flees the room.", czesc_1))
+
+chapter_p_4 <- which(grepl("For a few moments, Peeta and I", czesc_1))
+chapter_k_4 <- which(grepl("is fighting hard to kill", czesc_1))
+
+chapter_p_5 <- which(grepl("R-i-i-i-p!", czesc_1))
+chapter_k_5 <- which(grepl("Right on his bruise.", czesc_1))
+
+chapter_p_6 <- which(grepl("The Training Center has a", czesc_1))
+chapter_k_6 <- which(grepl("enjoy watching me die.", czesc_1))
+
+chapter_p_7 <- which(grepl("My slumbers are filled", czesc_1))
+chapter_k_7 <- which(grepl(" the exit without being", czesc_1))
+
+chapter_p_8 <- which(grepl("As I stride toward the elevator", czesc_1))
+chapter_k_8 <- which(grepl("Peeta has asked to be coached", czesc_1))
+
+chapter_p_9 <- which(grepl("Betrayal. That", czesc_1))
+chapter_k_9 <- which(grepl(" . . . she came here with me.", czesc_1))
+
+chapter_p_10 <- which(grepl("For a moment, the cameras hold", czesc_1))
+chapter_k_10 <- which(grepl("Games begin!", czesc_1))
+
+chapter_p_11 <- which(grepl("Sixty seconds.", czesc_1))
+chapter_k_11 <- which(grepl("The voice belongs to Peeta.", czesc_1))
+
+chapter_p_12 <- which(grepl("Thank goodness, I had the f", czesc_1))
+chapter_k_12 <- which(grepl(" of fire descending on me.", czesc_1))
+
+chapter_p_13 <- which(grepl("My first impulse is to scramble from the tree", czesc_1))
+chapter_k_13 <- which(grepl("something above my head.", czesc_1))
+
+chapter_p_14 <- which(grepl("My eyes follow the line of h", czesc_1))
+chapter_k_14 <- which(grepl("nto my eyes and I black out.", czesc_1))
+
+chapter_p_15 <- which(grepl("I enter a nightmare from which I wake", czesc_1))
+chapter_k_15 <- which(grepl("have to fix that, Rue.", czesc_1))
+
+chapter_p_16 <- which(grepl("Rue has decided to trust me whol", czesc_1))
+chapter_k_16 <- which(grepl(" blown backward into the air.", czesc_1))
+
+chapter_p_17 <- which(grepl("The impact with the hard-packed", czesc_1))
+chapter_k_17 <- which(grepl("name before the spear enters her", czesc_1))
+
+chapter_p_18 <- which(grepl("The boy from District 1 dies", czesc_1))
+chapter_k_18 <- which(grepl("Before I can stop myself", czesc_1))
+
+chapter_p_19 <- which(grepl("I clap my hands over my mouth", czesc_1))
+chapter_k_19 <- which(grepl("what Haymitch has sent you", czesc_1))
+
+chapter_p_20 <- which(grepl("Getting the broth into Peeta", czesc_1))
+chapter_k_20 <- which(grepl("The rest of Panem can.", czesc_1))
+
+chapter_p_21 <- which(grepl("In the remaining hours before nightfall", czesc_1))
+chapter_k_21 <- which(grepl("curve of my wrist", czesc_1))
+
+chapter_p_22 <- which(grepl("The sound of rain drumming on the", czesc_1))
+chapter_k_22 <- which(grepl(", that’s what I’m looking for", czesc_1))
+
+chapter_p_23 <- which(grepl("Every cell in my body wants me", czesc_1))
+chapter_k_23 <- which(grepl("In answer, I hold out the berries", czesc_1))
+
+chapter_p_24 <- which(grepl("It takes a while to explain the situation", czesc_1))
+chapter_k_24 <- which(grepl("thought of anything but to save myself", czesc_1))
+
+chapter_p_25 <- which(grepl("Muttations. No question", czesc_1))
+chapter_k_25 <- which(grepl("Everdeen and Peeta Mellark! I give you", czesc_1))
+
+chapter_p_26 <- which(grepl("I spew the berries from my mouth", czesc_1))
+chapter_k_26 <- which(grepl("Games is about to begin", czesc_1))
+
+chapter_p_27 <- which(grepl("The anthem booms in my ears", czesc_1))
+chapter_k_27 <- which(grepl("END OF BOOK ONE", czesc_1))
+```
+
+Podział na rozdziały książki "W pierścieniu ognia":
+```{r}
+chapter_p_28 <- which(grepl("I clasp the flask between my hands even though", czesc_2))
+chapter_k_28 <- which(grepl("snakelike eyes of President Snow.", czesc_2))
+
+chapter_p_29 <- which(grepl("In my mind, President Snow should", czesc_2))
+chapter_k_29 <- which(grepl(" the door clicks shut behind him.", czesc_2))
+
+chapter_p_30 <- which(grepl("The smell of blood", czesc_2))
+chapter_k_30 <- which(grepl("have to marry Peeta", czesc_2))
+
+chapter_p_31 <- which(grepl("We slog back to the train", czesc_2))
+chapter_k_31 <- which(grepl(" a bullet through his head", czesc_2))
+
+chapter_p_32 <- which(grepl("The man has only just crumpled", czesc_2))
+chapter_k_32 <- which(grepl("imperceptible shake of his", czesc_2))
+
+chapter_p_33 <- which(grepl("In that one slight motion", czesc_2))
+chapter_k_33 <- which(grepl(" President Snow calls an uprising.", czesc_2))
+
+chapter_p_34 <- which(grepl("A leather bag filled with food and", czesc_2))
+chapter_k_34 <- which(grepl("see his arm raise the whip", czesc_2))
+
+chapter_p_35 <- which(grepl("I cry, and spring forward", czesc_2))
+chapter_k_35 <- which(grepl("drugs pull him back under", czesc_2))
+
+chapter_p_36 <- which(grepl("Someone gives my shoulder a shake", czesc_2))
+chapter_k_36 <- which(grepl("s my mockingjay.", czesc_2))
+
+chapter_p_37 <- which(grepl("It makes no sense. My bird", czesc_2))
+chapter_k_37 <- which(grepl("is alive with electricity.", czesc_2))
+
+chapter_p_38 <- which(grepl("My feet back up automatically", czesc_2))
+chapter_k_38 <- which(grepl(" Which begs the question", czesc_2))
+
+chapter_p_39 <- which(grepl("Staying quietly in bed is harder", czesc_2))
+chapter_k_39 <- which(grepl("I am going back into the arena.", czesc_2))
+
+chapter_p_40 <- which(grepl("My body reacts before", czesc_2))
+chapter_k_40 <- which(grepl(" still hanging on my lips.", czesc_2))
+
+chapter_p_41 <- which(grepl("I remain at the window long after", czesc_2))
+chapter_k_41 <- which(grepl("Peeta home alive.", czesc_2))
+
+chapter_p_42 <- which(grepl("Having been through prep with Flavius", czesc_2))
+chapter_k_42 <- which(grepl("Our new Avox is Darius.", czesc_2))
+
+chapter_p_43 <- which(grepl("Haymitch grips my wrist", czesc_2))
+chapter_k_43 <- which(grepl("name on the dummy", czesc_2))
+
+chapter_p_44 <- which(grepl("The effect on the Gamemakers", czesc_2))
+chapter_k_44 <- which(grepl("has turned me into a mockingjay.", czesc_2))
+
+chapter_p_45 <- which(grepl("The effect on the Gamemakers", czesc_2))
+chapter_k_45 <- which(grepl("has turned me into a mockingjay.", czesc_2))
+
+chapter_p_46 <- which(grepl("m still smoldering a little", czesc_2))
+chapter_k_46 <- which(grepl("This is no place for a girl on fire", czesc_2))
+
+chapter_p_47 <- which(grepl("Ladies and gentlemen, let the Seventy", czesc_2))
+chapter_k_47 <- which(grepl("Instead, I find silence", czesc_2))
+
+chapter_p_48 <- which(grepl("I scream. I shake him harder", czesc_2))
+chapter_k_48 <- which(grepl("rouse them, I begin to blister.", czesc_2))
+
+chapter_p_49 <- which(grepl("Tiny, searing stabs. Wherever", czesc_2))
+chapter_k_49 <- which(grepl("inks its fangs into her", czesc_2))
+
+chapter_p_50 <- which(grepl("Peeta drops the sheath and buries", czesc_2))
+chapter_k_50 <- which(grepl("tock. This is a clock.", czesc_2))
+
+chapter_p_51 <- which(grepl("A clock. I can almost see the hands ticking", czesc_2))
+chapter_k_51 <- which(grepl("From reaching my little sister.", czesc_2))
+
+chapter_p_52 <- which(grepl("Only another agonized scream" , czesc_2))
+chapter_k_52 <- which(grepl("Rue as she died. Where Peeta", czesc_2))
+
+chapter_p_53 <- which(grepl("When I wake, I have a brief", czesc_2))
+chapter_k_53 <- which(grepl("before they bury my body", czesc_2))
+
+chapter_p_54 <- which(grepl("The anthem begins, but there are no faces", czesc_2))
+chapter_k_54 <- which(grepl("explosions begin, I find a star.", czesc_2))
+
+chapter_p_55 <- which(grepl("Everything seems to erupt at once.", czesc_2))
+chapter_k_55 <- which(grepl("END OF BOOK TWO", czesc_2))
+```
+
+Wczytanie rozdziałów obu książek do pojedynczych wierszy:
+```{r}
+chapter_1 <- paste(trilogy[chapter_p_1:chapter_k_1], collapse = " ")
+chapter_2 <- paste(trilogy[chapter_p_2:chapter_k_2], collapse = " ")
+chapter_3 <- paste(trilogy[chapter_p_3:chapter_k_3], collapse = " ")
+chapter_4 <- paste(trilogy[chapter_p_4:chapter_k_4], collapse = " ")
+chapter_5 <- paste(trilogy[chapter_p_5:chapter_k_5], collapse = " ")
+chapter_6 <- paste(trilogy[chapter_p_6:chapter_k_6], collapse = " ")
+chapter_7 <- paste(trilogy[chapter_p_7:chapter_k_7], collapse = " ")
+chapter_8 <- paste(trilogy[chapter_p_8:chapter_k_8], collapse = " ")
+chapter_9 <- paste(trilogy[chapter_p_9:chapter_k_9], collapse = " ")
+chapter_10 <- paste(trilogy[chapter_p_10:chapter_k_10], collapse = " ")
+chapter_11 <- paste(trilogy[chapter_p_11:chapter_k_11], collapse = " ")
+chapter_12 <- paste(trilogy[chapter_p_12:chapter_k_12], collapse = " ")
+chapter_13 <- paste(trilogy[chapter_p_13:chapter_k_13], collapse = " ")
+chapter_14 <- paste(trilogy[chapter_p_14:chapter_k_14], collapse = " ")
+chapter_15 <- paste(trilogy[chapter_p_15:chapter_k_15], collapse = " ")
+chapter_16 <- paste(trilogy[chapter_p_16:chapter_k_16], collapse = " ")
+chapter_17 <- paste(trilogy[chapter_p_17:chapter_k_17], collapse = " ")
+chapter_18 <- paste(trilogy[chapter_p_18:chapter_k_18], collapse = " ")
+chapter_19 <- paste(trilogy[chapter_p_19:chapter_k_19], collapse = " ")
+chapter_20 <- paste(trilogy[chapter_p_20:chapter_k_20], collapse = " ")
+chapter_21 <- paste(trilogy[chapter_p_21:chapter_k_21], collapse = " ")
+chapter_22 <- paste(trilogy[chapter_p_22:chapter_k_22], collapse = " ")
+chapter_23 <- paste(trilogy[chapter_p_23:chapter_k_23], collapse = " ")
+chapter_24 <- paste(trilogy[chapter_p_24:chapter_k_24], collapse = " ")
+chapter_25 <- paste(trilogy[chapter_p_25:chapter_k_25], collapse = " ")
+chapter_26 <- paste(trilogy[chapter_p_26:chapter_k_26], collapse = " ")
+chapter_27 <- paste(trilogy[chapter_p_27:chapter_k_27], collapse = " ")
+chapter_28 <- paste(trilogy[chapter_p_28:chapter_k_28], collapse = " ")
+chapter_29 <- paste(trilogy[chapter_p_29:chapter_k_29], collapse = " ")
+chapter_30 <- paste(trilogy[chapter_p_30:chapter_k_30], collapse = " ")
+chapter_31 <- paste(trilogy[chapter_p_31:chapter_k_31], collapse = " ")
+chapter_32 <- paste(trilogy[chapter_p_32:chapter_k_32], collapse = " ")
+chapter_33 <- paste(trilogy[chapter_p_33:chapter_k_33], collapse = " ")
+chapter_34 <- paste(trilogy[chapter_p_34:chapter_k_34], collapse = " ")
+chapter_35 <- paste(trilogy[chapter_p_35:chapter_k_35], collapse = " ")
+chapter_36 <- paste(trilogy[chapter_p_36:chapter_k_36], collapse = " ")
+chapter_37 <- paste(trilogy[chapter_p_37:chapter_k_37], collapse = " ")
+chapter_38 <- paste(trilogy[chapter_p_38:chapter_k_38], collapse = " ")
+chapter_39 <- paste(trilogy[chapter_p_39:chapter_k_39], collapse = " ")
+chapter_40 <- paste(trilogy[chapter_p_40:chapter_k_40], collapse = " ")
+chapter_41 <- paste(trilogy[chapter_p_41:chapter_k_41], collapse = " ")
+chapter_42 <- paste(trilogy[chapter_p_42:chapter_k_42], collapse = " ")
+chapter_43 <- paste(trilogy[chapter_p_43:chapter_k_43], collapse = " ")
+chapter_44 <- paste(trilogy[chapter_p_44:chapter_k_44], collapse = " ")
+chapter_45 <- paste(trilogy[chapter_p_45:chapter_k_45], collapse = " ")
+chapter_46 <- paste(trilogy[chapter_p_46:chapter_k_46], collapse = " ")
+chapter_47 <- paste(trilogy[chapter_p_47:chapter_k_47], collapse = " ")
+chapter_48 <- paste(trilogy[chapter_p_48:chapter_k_48], collapse = " ")
+chapter_49 <- paste(trilogy[chapter_p_49:chapter_k_49], collapse = " ")
+chapter_50 <- paste(trilogy[chapter_p_50:chapter_k_50], collapse = " ")
+chapter_51 <- paste(trilogy[chapter_p_51:chapter_k_51], collapse = " ")
+chapter_52 <- paste(trilogy[chapter_p_52:chapter_k_52], collapse = " ")
+chapter_53 <- paste(trilogy[chapter_p_53:chapter_k_53], collapse = " ")
+chapter_54 <- paste(trilogy[chapter_p_54:chapter_k_54], collapse = " ")
+chapter_55 <- paste(trilogy[chapter_p_55:chapter_k_55], collapse = " ")
+```
+
+Złączenie rozdziałów (wierszy) w jedną tabelę:
+```{r}
+merged_table <- data.frame(matrix(nrow = 55, ncol = 1))
+for (i in 1:55) {
+  chapter_name <- paste0("chapter_", i)
+  chapter_text <- eval(as.symbol(chapter_name))
+  merged_table[i, 1] <- chapter_text
+}
+merged_table$column_id <- 1:55
+```
+
+Wyczyszczenie tekstu:
+```{r}
+czysc_tekst_1 <- function(tekst) {
+  tekst_clean <- str_replace_all(tekst, "\\s{2,}", "") %>% 
+    str_replace_all("[:cntrl:]", "") %>%
+    tolower() %>% 
+    str_remove_all("rt") %>% 
+    str_remove_all("&amp") %>% 
+    str_remove_all("#[a-zA-Z0-9']*") %>% 
+    str_remove_all("@\\w+") %>% 
+    str_remove_all("(f|ht)(tp)([^ ]*)") %>% 
+    str_remove_all("http(s?)([^ ]*)") %>% 
+    str_remove_all("\"ebook converter DEMO - www.ebook-") %>%
+    str_remove_all("ebook") %>%
+    str_remove_all("conveer") %>%
+    str_remove_all("say") %>%
+    str_remove_all("demo") %>%
+    str_remove_all("www") %>%
+    str_replace_all("[[:punct:]]", " ") %>%
+    str_remove_all("\\d") %>%
+    str_replace_all("\\s{2,}", " ") %>% 
+    str_replace_all("\\b\\w{1}\\b", "") %>%
+    str_trim()
+  
+  return(tekst_clean)
+}
+merged_table_clean <- merged_table
+merged_table_clean[, 1] <- sapply(merged_table_clean[, 1], czysc_tekst_1)
+```
+
+Zmiana nazwy kolumn na text (przechowuje tekst danego rozdziału) oraz n (przechowuje numer rozdziału):
+```{r}
+colnames(merged_table_clean) <- c("text", "n")
+```
+
+## 3.1 Grupowanie
+
+Stworzenie nowej zmiennej group_table:
+```{r}
+group_table <- merged_table_clean$text
+```
+
+Tworzenie macierzy document-term, dokonanie stemmingu, usunięcie stopwords:
+```{r}
+books_corpus <- VCorpus(VectorSource(group_table))
+control <- list(
+  bounds = list(global = c(6, Inf)),
+  removeSparseTerms = 0.999,
+  stemming = TRUE,
+  stopwords = TRUE,
+  removePunctuation = TRUE,
+  duplicates = TRUE,
+  weighting = weightTf
+)
+control$stopwords <- stopwords
+dtm_tf <- DocumentTermMatrix(books_corpus, control = control)
+x <- as.data.frame(as.matrix(dtm_tf))
+dtm_tf
+```
+***Wnioski:*** Macierz document-term posiada 55 dokumentów (rozdziałów książek), w których znajdują się 2004 unikalne termy.
+
+Obliczenie odległości pomiędzy wierszami macierzy:
+```{r}
+dm <- as.matrix(dtm_tf)
+odl <- dist(dm)
+```
+
+Obliczenie odległości miarą euklidesową:
+```{r}
+odl_e <- proxy::dist(dm, method = "euclidean")
+```
+
+Obliczenie odległości miarą cosinusową:
+```{r}
+odl_c <- proxy::dist(dm, method = "cosine")
+```
+
+Odległość pomiędzy skupieniami obliczana metodą całkowitego połaczenia:
+```{r}
+hg_e <- hclust(odl_e)
+hg_c <- hclust(odl_c)
+```
+Odległość pomiędzy skupieniami zdefiniowana jest jako odległość miedzy dwoma najbardziej oddalonymi punktami, po jednym z każdej grupy. Poszukiwana jest minimalna odległość pomiędzy dowolnymi rekordami z dwóch grup, które są najbardziej oddalone od siebie.
+
+Dendogram na podstawie miary euklidesowej dla dwóch skupień (grup):
+```{r}
+hg_ladne_e <- as.dendrogram(hg_e)
+
+hg_ladne_e <- color_labels(hg_ladne_e, 2, col = c("orangered", "seagreen"))
+hg_ladne_e <- color_branches(hg_ladne_e, 2, col = c("orangered", "seagreen"))
+
+par(cex = 0.7)
+plot(hg_ladne_e, main = paste("Dendogram na podstawie miary:\n", "euklidesowej"))
+rect.dendrogram(hg_ladne_e, k = 2, border = "grey20", lty = 2)
+```
+Dendogram na podstawie miary cosinusowej dla dwóch skupień (grup):
+```{r}
+hg_ladne_c <- as.dendrogram(hg_c)
+
+hg_ladne_c <- color_labels(hg_ladne_c, 2, col = c("orangered", "seagreen"))
+hg_ladne_c <- color_branches(hg_ladne_c, 2, col = c("orangered", "seagreen"))
+
+par(cex = 0.7)
+plot(hg_ladne_c, main = paste("Dendogram na podstawie miary:\n", "cosinusowej"))
+rect.dendrogram(hg_ladne_c, k = 2, border = "grey20", lty = 2)
+```
+
+***Wnioski:*** Można wysunąć wniosek, iż grupowanie nie dokonało poprawnego podziału rozdziałów na pierwszą i drugą część książki, zarówno dla metody euklidesowej, jak i cosinusowej. Po podziale na większą ilość grup, rozdziały nadal nie były przyporządkowywane zgodnie z prawidłową częścią książki. Metody nie wyodrębniają wspólnych grup w porównaniu do grup naturalnych.
+
+
+## 3.2 Topic modelling
+
+Proces rozpoczęto od odkrywania wątków, które mogą występować w rozdziałach książek.
+
+W celu znalezienia wątków występujących w książkach wykorzystano metodę redukcji wymiaru przestrzeni cech Latent Dirichlet Allocation (LDA). Ten model statystyczny opisuje hipotetyczny proces losowy generujący kolejne słowa każdego dokumentu (książki) zgodnie z rozkładem wątków w tym dokumencie.
+
+W oparciu o wastwę merytoryczną obu książek można założyć, że występuje około 10 wątków.
+
+Budowanie modelu tematów za pomocą funkcji LDA() dla 3, 5 i 10 wątków w celu sprawdzenia, ile wątków zostanie wyróżnionych przez tę metodę:
+```{r}
+lda3 <- LDA(dtm_tf, 3, control = list(seed = 1652))
+lda5 <- LDA(dtm_tf, 5, control = list(seed = 1652))
+lda10 <- LDA(dtm_tf, 5, control = list(seed = 1652))
+```
+
+Korzystając z pakietu ***topicmodels*** można wyodrębnić następujące informacje z obiektów klasy LDA:
+
+- numer dokumentu (rozdziału) z numerem prawdopodobnego wątku:
+```{r}
+(watki3 <- topics(lda3))
+(watki5 <- topics(lda5))
+(watki10 <- topics(lda10))
+```
+
+- najistotniejszy term dla wątku:
+```{r}
+(watki_term3 <- terms(lda3))
+(watki_term5 <- terms(lda5))
+(watki_term10 <- terms(lda10))
+```
+
+- opis każdego dokumentu: nr wątku + najistotniejszy term
+```{r}
+watki_term3[watki3]
+watki_term5[watki5]
+watki_term10[watki10]
+```
+
+Tworzenie tabeli rozdział-wątek w celu lepszej wizualizacji danych dla podziału na 3, 5 i 10 wątków i porównania wyników:
+```{r}
+watki_table <- tibble(Rozdział = 1:55, Wątek_LDA3=watki_term3[watki3], Wątek_LDA5=watki_term5[watki5], Wątek_LDA10=watki_term10[watki10])
+watki_table
+```
+
+***Wnioski:*** Można zauważyć, że zgodnie z wynikami metody LDA, najbardziej logiczny wydaje się *podział na 3 wątki (district, peeta, rue)*. Przy podziale na 5 oraz 10 wątków niektóre z nich powtórzyły się (metoda zwróciła mniej niż 5 wątków).
+
+Wyodrębnione wątki:    
+*Wątek 1:* ***rue***  
+Rue była młodą dziewczyną pochodzącą z dystryktu jedenaście. Była sojuszniczką Katniss Everdeen podczas 74. Igrzysk Śmierci.   
+
+*Wątek 2:* ***district***   
+Dystrykt to jedno z dwunastu regionów panujących w fikcyjnym świecie "Igrzysk Śmierci". Każdy dystrykt ma swoje specjalizacje i jest odpowiedzialny za produkcję różnych towarów lub usług.   
+
+*Wątek 3:* ***peeta***   
+Peeta Mellark to chłopak pochodzący z dystryktu dwunastego. Był partnerem Katniss w 74. Igrzyskach Śmierci.    
+
+
+Wybranie 4 najczęściej występujących termów dla każdego z wątków:
+```{r}
+tematy_termy3 <- terms(lda3, 4)
+tematy_termy3 
+```
+
+Podział termów na wątki:
+```{r}
+tematy_termy3[2,][watki3]
+```
+
+Utworzenie tabeli w celu łatwiejszej analizy dokonanego podziału:
+```{r}
+tematy_termy3_s <- apply(tematy_termy3, 2, paste, collapse = "/ ")
+tematy3_df <- data.frame(dokument = 1:55, Wątek = watki3, Termy = tematy_termy3_s[watki3])
+```
+
+***Wnioski:*** Dla wyodrębnionych wątków najczęściej występującymu termamy były:
+*Wątek 1 (rue):* rue, back, now, peeta    
+*Wątek 2 (district):* district, prim, back, time   
+*Wątek 3 (peeta):* peeta, haymitch, right, back	   
+
+Jak można zauważyć termy w obrębie wątków powtórzyły się oraz zawierały także inne wątki.
+
+Wizualizacja wyników analizy wątków (w formacie JSON):
+```{r}
+phi <- posterior(lda3)$terms %>% as.matrix
+theta <- posterior(lda3)$topics %>% as.matrix
+vocab <- colnames(phi)
+
+doc_length <- rowSums(as.matrix(dtm_tf))
+freq_matrix <- colSums(as.matrix(dtm_tf))
+```
+```{r, eval=FALSE}
+json_lda <- LDAvis::createJSON(phi = phi, theta = theta,
+                               vocab = vocab,
+                               doc.length = doc_length,
+                               term.frequency = freq_matrix)
+
+LDAvis::serVis(json_lda)
+```
+***Wnioski:*** Podział na wątki przy wykorzystaniu metody LDA nie odpowiada naturalnemu podziałowi na rozdziały książek "Igrzyska śmierci" oraz "W pierścieniu ognia".
+
+# 4. Klasyfikatory
+
+Na etapie klasyfikacji zdecydowano się na naturalny podział rozdziałów zgodnie z ich przynależnością do danej części książki, ponieważ metody grupowania i podziału na wątki nie przyniosły satysfakcjonujących rezultatów.
+
+Stworzenie tabeli z numerami rozdziałów i przydziałem do 1 lub 2 części książki:
+```{r}
+tabela <- data.frame(rozdzial = 1:55, część = NA)
+tabela$część[tabela$rozdzial <= 27] <- "część 1"
+tabela$część[tabela$rozdzial > 27] <- "część 2"
+tabela$część <- factor(tabela$część)
+print(tabela)
+```
+
+## 4.1 Liczebność występowania ważona binarnie
+
+Stworzenie macierzy binarnej document-term, usunięcie stopwords, zdublowanych tokenów oraz dokonanie stemmingu:
+```{r}
+books_corpus <- VCorpus(VectorSource(group_table))
+control <- list(
+  stemming = TRUE,
+  stopwords = TRUE,
+  removePunctuation = TRUE,
+  duplicates = TRUE,
+  weighting = weightBin
+)
+control$stopwords <- stopwords
+
+dtm_binary <- DocumentTermMatrix(books_corpus, control = control)
+
+dtm_bin <- data.frame(as.matrix(dtm_binary))
+
+dtm_bin$type <- tabela$część
+```
+
+Podział na zbiór testowy oraz treningowy losowo w proporcji 75:25:
+```{r}
+set.seed(1234)
+train_indices <- createDataPartition(dtm_bin$type, p = 0.75, list = FALSE)
+
+dtm_bin_train <- dtm_bin[train_indices, ]
+dtm_bin_test <- dtm_bin[-train_indices, ]
+```
+
+Obliczenie procentowego udziału poszczególnych poziomów zmiennej type w obiektach dtm_bin_train i dtm_bin_test:
+```{r}
+prop.table(table(dtm_bin_train$type))
+prop.table(table(dtm_bin_test$type))
+```
+Dostosowanie poziomów dla obu zbiorów:
+```{r}
+levels(dtm_bin_test$type) <- levels(dtm_bin_train$type)
+```
+
+Stworzenie modelu, testowanie i stworzenie confusion matrix:
+```{r}
+classifier_bin <- naiveBayes(type ~ ., data = dtm_bin_train)
+predictions_bin <- predict(classifier_bin, newdata = dtm_bin_test)
+confusion_matrix_bin <- table(predictions_bin, dtm_bin_test$type)
+```
+
+
+## 4.2 Liczebność występowania ważona logarytmicznie
+
+Stworzenie macierzy logarytmicznej document-term, usunięcie stopwords, zdublowanych tokenów oraz dokonanie stemmingu:
+```{r}
+dtm_log <- log2(as.matrix(dtm_tf) + 1)
+
+dtm_log <- data.frame(dtm_log)
+
+dtm_log$type <- tabela$część
+```
+
+Podział na zbiór testowy oraz treningowy losowo w proporcji 75:25:
+```{r}
+dtm_log_train <- dtm_log[train_indices, ]
+dtm_log_test <- dtm_log[-train_indices, ]
+```
+
+Obliczenie procentowego udziału poszczególnych poziomów zmiennej type w obiektach dtm_log_train i dtm_log_test:
+```{r}
+prop.table(table(dtm_log_train$type))
+prop.table(table(dtm_log_test$type))
+```
+Dostosowanie poziomów dla obu zbiorów:
+```{r}
+levels(dtm_log_test$type) <- levels(dtm_log_train$type)
+```
+
+Stworzenie modelu, testowanie i stworzenie confusion matrix:
+```{r}
+classifier_log <- naiveBayes(type ~ ., data = dtm_log_train)
+predictions_log <- predict(classifier_log, newdata = dtm_log_test)
+confusion_matrix_log <- table(predictions_log, dtm_log_test$type)
+```
+
+
+## 4.3 Liczebność występowania ważona TfIdf
+
+Stworzenie macierzy TfIdf document-term, usunięcie stopwords, zdublowanych tokenów oraz dokonanie stemmingu:
+```{r}
+books_corpus <- VCorpus(VectorSource(group_table))
+control <- list(
+  stemming = TRUE,
+  stopwords = TRUE,
+  removePunctuation = TRUE,
+  duplicates = TRUE,
+  weighting = weightTfIdf
+)
+control$stopwords <- stopwords
+
+dtm_tfidf_x <- DocumentTermMatrix(books_corpus, control = control)
+
+dtm_tfidf <- data.frame(as.matrix(dtm_tfidf_x))
+
+dtm_tfidf$type <- tabela$część
+```
+
+Podział na zbiór testowy oraz treningowy losowo w proporcji 75:25:
+```{r}
+set.seed(1234)
+train_indices <- createDataPartition(dtm_tfidf$type, p = 0.75, list = FALSE)
+
+dtm_tfidf_train <- dtm_tfidf[train_indices, ]
+dtm_tfidf_test <- dtm_tfidf[-train_indices, ]
+```
+
+Obliczenie procentowego udziału poszczególnych poziomów zmiennej type w obiektach dtm_tfidf_train i dtm_tfidf_test:
+```{r}
+prop.table(table(dtm_tfidf_train$type))
+prop.table(table(dtm_tfidf_test$type))
+```
+Dostosowanie poziomów dla obu zbiorów:
+```{r}
+levels(dtm_tfidf_test$type) <- levels(dtm_tfidf_train$type)
+```
+
+Stworzenie modelu, testowanie i stworzenie confusion matrix:
+```{r}
+classifier_tfidf<- naiveBayes(type ~ ., data = dtm_tfidf_train)
+predictions_tfidf <- predict(classifier_tfidf, newdata = dtm_tfidf_test)
+confusion_matrix_tfidf <- table(predictions_tfidf, dtm_tfidf_test$type)
+```
+
+
+## 4.4 Wybór najlepszego i interpretacja wyników
+
+Macierz pomyłek dla macierzy, gdzie liczebność występowania jest ważona binarnie:
+```{r}
+confusion_matrix_bin
+```
+***Wnioski:***
+Dla kategorii "część 1" zostały sklasyfikowane poprawnie 2 próbki.
+Dla kategorii "część 2" została sklasyfikowana poprawnie 1 próbka.
+Istnieje 6 przypadków, gdzie próbki z kategorii "część 1" zostały błędnie sklasyfikowane jako "część 2".
+Istnieje 4 przypadki, gdzie próbki z kategorii "część 2" zostały błędnie sklasyfikowane jako "część 1".
+
+
+Macierz pomyłek dla macierzy, gdzie liczebność występowania jest ważona logarytmicznie:
+```{r}
+confusion_matrix_log
+```
+***Wnioski:***
+Dla kategorii "część 1" została sklasyfikowana poprawnie 1 próbka.
+Dla kategorii "część 2" zostały sklasyfikowane poprawnie 2 próbki.
+Istnieje 5 przypadków, gdzie próbki z kategorii "część 1" zostały błędnie sklasyfikowane jako "część 2".
+Istnieje 5 przypadków, gdzie próbki z kategorii "część 2" zostały błędnie sklasyfikowane jako "część 1".
+
+
+Macierz pomyłek dla macierzy, gdzie liczebność występowania jest ważona TfIdf:
+```{r}
+confusion_matrix_tfidf 
+```
+***Wnioski:***
+Dla kategorii "część 1" zostały sklasyfikowane poprawnie 3 próbki.
+Dla kategorii "część 2" zostały sklasyfikowane poprawnie 2 próbki.
+Istnieją 5 przypadków, gdzie próbki z kategorii "część 1" zostały błędnie sklasyfikowane jako "część 2".
+Istnieją 3 przypadki, gdzie próbki z kategorii "część 2" zostały błędnie sklasyfikowane jako "część 1".   
+
+
+Można zauważyć, że macierz pomyłek dla macierzy, gdzie liczebność występowania jest ważona TfIdf, ma największą liczbę poprawnie sklasyfikowanych próbek dla obu klas (3 dla "część 1" i 2 dla "część 2"), a także najmniejszą liczbę błędnych klasyfikacji spoza przekątnej (łącznie 8 błędów). W porównaniu do macierzy, gdzie liczebność występowania jest ważona binarnie, która ma największą liczbę błędnych klasyfikacji (łącznie 10 błędów), oraz macierzy, gdzie liczebność występowania jest ważona logarytmicznie, która również ma większą liczbę błędnych klasyfikacji (łącznie 10 błędów), można stwierdzić, że *macierz ważona TfIdf daje lepsze wyniki klasyfikacji*.
+
+
+# 5. Wskaźnik polaryzacji nastroju
+
+```{r}
+merged_table_sentiment <- merged_table_clean %>%
+  mutate(sentiment = get_sentiment(text))
+
+selected_columns <- merged_table_sentiment %>% 
+  select(n, sentiment) %>% 
+  mutate(sentiment_label = case_when(
+    sentiment > 0 ~ "pozytywny",
+    sentiment == 0 ~ "neutralny",
+    sentiment < 0 ~ "negatywny"
+  ))
+
+print(selected_columns)
+```
+
+Analiza nastroju wszystkich rozdziałów:
+```{r}
+ggplot(selected_columns, aes(x = sentiment_label)) +
+  geom_bar(fill = "darkgrey") +
+  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.5) +
+  labs(title = "Analiza nastroju wszystkich rozdziałów", x = "Ocena nastroju", y = "Liczba rozdziałów")
+
+```
+***Wnioski:*** Spośród 55 rozdziałów 39 z nich ma nastrój negatywny, natomiast 16 - pozytywny.
+
+Analiza nastroju dla książki "Igrzyska śmierci":
+```{r}
+selected_columns$sentiment <- as.numeric(selected_columns$sentiment)
+
+subset_1 <- selected_columns %>% filter(n >= 1 & n <= 27)
+subset_2 <- selected_columns %>% filter(n >= 28 & n <= 55)
+
+plot_1 <- ggplot(subset_1, aes(x = factor(n), y = sentiment, fill = sentiment_label)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("red", "green", "steelblue")) +
+  labs(title = "Analiza nastroju - Igrzyska śmierci", x = "Rozdział", y = "Sentyment")
+
+print(plot_1)
+```
+
+Analiza nastroju dla książki "W pierścieniu ognia":
+```{r}
+plot_2 <- ggplot(subset_2, aes(x = factor(n), y = sentiment, fill = sentiment_label)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("red", "green", "steelblue")) +
+  labs(title = "Analiza nastroju - W pierścieniu ognia", x = "Rozdział", y = "Sentyment")
+print(plot_2)
+```
+***Wnioski:*** Można zauważyć, że nastrój rozkłada się niemal identycznie w obu książkach. Można wyróżnić 8 rozdziałów z nastojem pozytywnym w każdej ze książek, pozostałe są negatywne, natomiast rozdziały neutralne nie występują.
+
